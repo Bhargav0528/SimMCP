@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, constr
 import os
 import tempfile
 import uuid
-import matlab
+import matlab.engine, matlab
 
 # ──────────────────────────────────────────────────────────────────────
 # 1.  Session container around a single MATLAB Engine
