@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCP Demo</title>
+<style>
+    body { font-family:sans-serif; margin:2rem; }
+    #result img { max-width:600px; }
+</style>
+</head>
+<body>
+<h1>Simulate a Model</h1>
+ 
+  <label for="prompt">Prompt:</label>
+<input id="prompt" size="60"
+         placeholder="simulate a mass spring damper for 10 seconds">
+<button id="runBtn">Run</button>
+ 
+  <div id="status"></div>
+<div id="result"></div>
+ 
+<script>
+const api = 'http://localhost:8000/simulate';     // adjust if remote
+ 
+document.getElementById('runBtn').onclick = async () => {
+  const prompt = document.getElementById('prompt').value.trim();
+  if (!prompt) return;
+ 
+  document.getElementById('status').innerText = '⏳ running…';
+  document.getElementById('result').innerHTML = '';
+ 
+  try {
+    const r = await fetch(api, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+    const data = await r.json();
+    if (data.status !== 'ok') throw new Error(JSON.stringify(data));
+ 
+    document.getElementById('status').innerText = '✅ done';
+    document.getElementById('result').innerHTML =
+      `<img src="${data.image_path}"><p><a href="${data.image_path}" download>Download PNG</a></p>`;
+  } catch (err) {
+    console.error(err);
+    document.getElementById('status').innerText = '❌ error – see console';
+  }
+};
+</script>
+</body>
+</html>
