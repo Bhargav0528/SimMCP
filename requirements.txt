@@ -4,7 +4,14 @@
 # Development dependencies
 # These are already in setup.py as extras, but you can add them here if needed
 # for tools that don't support extras_require
-fastapi==0.111
-uvicorn==0.29
-pydantic==2.7
-python-multipart   # for file upload later, optional
+fastmcp>=2.10.2
+pydantic>=2.11.7
+fastapi>=0.111.0
+uvicorn>=0.29.0
+python-multipart>=0.0.20
+matlabengine>=9.14  # Install MATLAB Engine for Python from MATLAB installation
+
+# Development (optional)
+pytest>=8.4.1
+black>=25.1.0
+isort>=6.0.1
