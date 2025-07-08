@@ -1,0 +1,27 @@
+{
+    "modelName": "job_42",
+    "ops": [
+      { "cmd": "add_block",
+        "block": "simulink/Commonly Used Blocks/Integrator",
+        "name": "x",
+        "position": [120,40,160,80] },
+   
+      { "cmd": "add_block",                       
+        "block": "simulink/Sinks/Out1",           
+        "name": "Out",
+        "position": [200,40,240,80] },           
+   
+      { "cmd": "add_block",
+        "block": "simulink/Sources/Sine Wave",
+        "name": "force",
+        "position": [40,50,80,90] },
+   
+      { "cmd": "add_line", "src": "force/1", "dst": "x/1" },
+   
+      { "cmd": "add_line", "src": "x/1", "dst": "Out/1" },   
+   
+      { "cmd": "sim", "stopTime": "10" },
+   
+      { "cmd": "export", "signal": "x", "filename": "result.png" }
+    ]
+  }

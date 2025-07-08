@@ -1,0 +1,10 @@
+# Core dependencies
+# Add your project's runtime dependencies here
+
+# Development dependencies
+# These are already in setup.py as extras, but you can add them here if needed
+# for tools that don't support extras_require
+fastapi==0.111
+uvicorn==0.29
+pydantic==2.7
+python-multipart   # for file upload later, optional
