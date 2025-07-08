@@ -6,6 +6,17 @@ import json
 
 from tools.core_tools.functions import new_model, add_block, add_line, set_param, sim, export_plot, close_session
 
+import logging
+
+# Configure the logging
+logging.basicConfig(
+    filename='app.log',           # Log file name
+    level=logging.INFO,           # Logging level
+    format='%(asctime)s - %(levelname)s - %(message)s'  # Log format
+)
+
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Fast-MCP host
 # ----------------------------------------------------------------------
@@ -22,11 +33,12 @@ def get_simulink_blocks_json() -> dict:
     """
     Serve the entire Simulink blocks JSON data as a resource.
     """
+
     JSON_PATH = Path(__file__).parent / "resources/SimulinkCore/core_blocks.json"
     with open(JSON_PATH, "r", encoding="utf-8") as f:
         SIMULINK_BLOCKS_DATA = json.load(f)
+    logging.info(SIMULINK_BLOCKS_DATA);
     return SIMULINK_BLOCKS_DATA
-
 
 # ──────────────────────────────────────────────────────────────────────
 # 4.  Fast-MCP tool definitions
