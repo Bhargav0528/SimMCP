@@ -1,0 +1,66 @@
+{
+    "sinewave": {
+      "description": "Generates a sine wave signal with configurable amplitude, frequency, and phase.",
+      "parameters": {
+        "Amplitude": {
+          "description": "Peak value of the sine wave.",
+          "default": 1.0
+        },
+        "Frequency": {
+          "description": "Frequency in Hertz (Hz).",
+          "default": 1.0
+        },
+        "Phase": {
+          "description": "Phase offset in radians.",
+          "default": 0.0
+        },
+        "SampleTime": {
+          "description": "Time interval between samples.",
+          "default": 0.0
+        }
+      },
+      "usage": "Used in simulations requiring sinusoidal input signals.",
+      "reference": "https://www.mathworks.com/help/simulink/slref/sinewave.html"
+    },
+    "gain": {
+      "description": "Multiplies the input signal by a constant gain value.",
+      "parameters": {
+        "Gain": {
+          "description": "Multiplier for the input signal.",
+          "default": 3.0
+        }
+      },
+      "usage": "Used to scale or amplify signals.",
+      "reference": "https://www.mathworks.com/help/simulink/slref/gain.html"
+    },
+    "integrator": {
+      "description": "Computes the integral of the input signal over time.",
+      "parameters": {
+        "InitialCondition": {
+          "description": "Initial value of the integrator.",
+          "default": 0.0
+        },
+        "UpperSaturationLimit": {
+          "description": "Optional upper limit on output.",
+          "default": "Inf"
+        },
+        "LowerSaturationLimit": {
+          "description": "Optional lower limit on output.",
+          "default": "-Inf"
+        }
+      },
+      "usage": "Used for accumulating signals or solving differential equations.",
+      "reference": "https://www.mathworks.com/help/simulink/slref/integrator.html"
+    },
+    "constant": {
+      "description": "Outputs a constant value throughout the simulation.",
+      "parameters": {
+        "Value": {
+          "description": "The constant output value.",
+          "default": 0.0
+        }
+      },
+      "usage": "Used to provide constant inputs to other blocks.",
+      "reference": "https://www.mathworks.com/help/simulink/slref/constant.html"
+    }
+  }
