@@ -1,0 +1,217 @@
+# simulink_server.py  ────────────────────────────────────────────────
+import os, uuid, json, tempfile, base64, statistics, shutil
+from pathlib import Path
+from typing import Literal
+import matlab.engine, matlab
+from fastmcp import FastMCP
+from pydantic import BaseModel, Field
+
+# ── CONFIG ──────────────────────────────────────────────────────────
+MODEL_DIR   = Path.home() / "SimMCP-models"     # saved .slx & snapshots
+CATALOG_JSON = {
+    "Sources"   : ["simulink/Sources/Constant", "simulink/Sources/Sine Wave"],
+    "Sinks"     : ["simulink/Sinks/Out1", "simulink/Sinks/Scope"],
+    "Continuous": ["simulink/Continuous/Integrator", "simulink/Continuous/Transfer Fcn"],
+    "Math"      : ["simulink/Math Operations/Gain", "simulink/Math Operations/Sum"]
+}
+MODEL_DIR.mkdir(exist_ok=True)
+
+# ── MCP host ────────────────────────────────────────────────────────
+mcp = FastMCP("Simulink Core Toolbox")
+
+# Expose catalog as a read-only resource
+CATALOG_PATH = MODEL_DIR / "catalog_core.json"
+CATALOG_PATH.write_text(json.dumps(CATALOG_JSON, indent=2))
+
+@mcp.resource("catalog://{item}")
+def catalog_resource(item: str):          #  ← drop _ctx   ✓
+    if item != "core":
+        raise FileNotFoundError(item)
+
+    return {
+        "content"  : CATALOG_PATH.read_bytes(),
+        "mime_type": "application/json",
+        "encoding" : "base64",
+        "filename" : "catalog_core.json"
+    }
+
+# ── Session class ───────────────────────────────────────────────────
+class SimulinkSession:
+    def __init__(self, gui: bool = False):
+        flags = [] if gui else ["-nodisplay", "-nosplash", "-nodesktop"]
+        self.eng  = matlab.engine.start_matlab(*flags)
+        self.mdl  = f"job_{uuid.uuid4().hex[:8]}"
+        self.eng.new_system(self.mdl, nargout=0)
+
+    # 1 add_block
+    def add_block(self, path, name, pos=None, value=None):
+        dest = f"{self.mdl}/{name}"
+        if self.eng.find_system(self.mdl, "SearchDepth",1, "Name",name, nargout=1):
+            raise ValueError(f"'{name}' exists.")
+        if pos is None:
+            idx = len(self.eng.find_system(self.mdl, "SearchDepth",1, nargout=1))
+            pos = [40+80*idx, 40, 80+80*idx, 90]
+        self.eng.add_block(path, dest, "Position", matlab.double(pos), nargout=0)
+        if value is not None:
+            self.eng.set_param(dest, "Value", str(value), nargout=0)
+
+    # 2 add_line
+    def add_line(self, src, dst):
+        self.eng.add_line(self.mdl, src, dst, "autorouting", "on", nargout=0)
+
+    # 3 set_param
+    def set_param(self, target, params):
+        dest = f"{self.mdl}/{target}"
+        if not self.eng.find_system(dest, nargout=1):
+            raise ValueError(f"Block '{target}' not found.")
+        kv = sum([[k, str(v)] for k, v in params.items()], [])
+        self.eng.set_param(dest, *kv, nargout=0)
+
+    # 4 delete
+    def delete(self, name_or_line):
+        self.eng.delete_block(f"{self.mdl}/{name_or_line}", nargout=0)
+
+    # 5 validate
+    def validate(self):
+        try:
+            self.eng.set_param(self.mdl, "SimulationCommand", "Update", nargout=0)
+            return {"status": "ok"}
+        except matlab.engine.MatlabExecutionError as e:
+            return {"status": "error", "message": str(e)}
+
+    # 6 sim
+    def sim(self, stop_time):
+        if not self.eng.find_system(self.mdl, "SearchDepth",1, "BlockType","Outport", nargout=1):
+            first = self.eng.find_system(self.mdl, "SearchDepth",1, "Type","block", nargout=1)[0]
+            self.eng.add_block("simulink/Sinks/Out1", f"{self.mdl}/AUTO_OUT", nargout=0)
+            self.eng.add_line(self.mdl, f"{first}/1", "AUTO_OUT/1", "autorouting","on", nargout=0)
+        self.eng.set_param(self.mdl, "SaveTime","on","SaveOutput","on","SaveFormat","Array", nargout=0)
+        run_id = f"run_{uuid.uuid4().hex[:6]}"
+        setattr(self, run_id, self.eng.sim(self.mdl, "StopTime", str(stop_time),
+                                           "ReturnWorkspaceOutputs","on", nargout=1))
+        return run_id
+
+    # 7 list_signals
+    def list_signals(self, run_id):
+        simout = getattr(self, run_id)
+        info = {}
+        try:
+            yout = self.eng.get(simout, 'yout', nargout=1)
+            cols = len(yout[0]) if isinstance(yout[0], list) else 1
+            info["yout"] = cols
+        except: info["yout"] = 0
+        try:
+            logs = self.eng.get(simout, 'logsout', nargout=1)
+            n    = self.eng.get(logs, 'numElements', nargout=1)
+            names = [self.eng.get(self.eng.get(logs,'get',k,nargout=1),'Name',nargout=1)
+                     for k in range(1,n+1)]
+            info["logsout"] = names
+        except: info["logsout"] = []
+        return info
+
+    # 8 plot
+    def plot(self, run_id, source: Literal["yout","logsout"], index:int):
+        eng, simout = self.eng, getattr(self, run_id)
+        tout = eng.get(simout,'tout', nargout=1)
+        if source=="yout":
+            y = eng.get(simout,'yout', nargout=1)
+            y = [(row[index-1] if isinstance(row, list) else row) for row in y]
+            label = f"yout[{index}]"
+        else:
+            ds  = eng.get(eng.get(simout,'logsout', nargout=1),'get', index, nargout=1)
+            y   = eng.get(ds,'Values', nargout=1)['Data']
+            label = eng.get(ds,'Name', nargout=1)
+        if len(y) and isinstance(y[0], list): y = [row[0] for row in y]
+        fig = eng.figure(nargout=1)
+        eng.plot(tout, y, nargout=0); eng.xlabel("Time (s)"); eng.ylabel(label)
+        p = Path(tempfile.gettempdir())/f"plot_{uuid.uuid4().hex[:6]}.png"
+        eng.exportgraphics(fig, str(p), nargout=0)
+        return _rich_image(p)
+
+    # 9 snapshot
+    def snapshot(self):
+        p = Path(tempfile.gettempdir())/f"shot_{uuid.uuid4().hex[:6]}.png"
+        self.eng.open_system(self.mdl, nargout=0)
+        self.eng.eval(f"print('-s{self.mdl}','-dpng','{p}','-r150')", nargout=0)
+        return _rich_image(p)
+
+    # 10 save_model
+    def save_model(self, name=None):
+        path = MODEL_DIR / f"{name or self.mdl}.slx"
+        self.eng.save_system(self.mdl, str(path), nargout=0)
+        return f"model://{path.name}"
+
+    # 11 close
+    def close(self):
+        self.eng.quit()
+
+# ── helper: inline-png payload ───────────────────────────────────────
+def _rich_image(path: Path):
+    return {
+        "content": base64.b64encode(path.read_bytes()).decode(),
+        "mime_type": "image/png",
+        "encoding": "base64",
+        "filename": path.name
+    }
+
+# ── Session registry ────────────────────────────────────────────────
+_SESS: dict[str, SimulinkSession] = {}
+def _mk(gui: bool):  sid=uuid.uuid4().hex[:8]; _SESS[sid]=SimulinkSession(gui); return sid
+def _get(sid):      return _SESS[sid]
+
+# ── Pydantic payloads & tool wrappers ───────────────────────────────
+class Sid(BaseModel): session_id:str
+
+class NewArgs(BaseModel): gui:bool=False
+@mcp.tool(name="new_model")        # 1
+def new_model(a:NewArgs): return _mk(a.gui)
+
+class BlockArgs(Sid):
+    block_path:str; name:str; position:list[int]|None=None; value:str|None=None
+@mcp.tool(name="add_block")        # 2
+def add_block(a:BlockArgs):
+    _get(a.session_id).add_block(a.block_path,a.name,a.position,a.value);return"ok"
+
+class LineArgs(Sid): src:str; dst:str
+@mcp.tool(name="add_line")         # 3
+def add_line(a:LineArgs): _get(a.session_id).add_line(a.src,a.dst); return"ok"
+
+class ParamArgs(Sid): target:str; params:dict[str,str]
+@mcp.tool(name="set_param")        # 4
+def set_param(a:ParamArgs): _get(a.session_id).set_param(a.target,a.params);return"ok"
+
+class DelArgs(Sid): name:str
+@mcp.tool(name="delete")           # 5
+def delete(a:DelArgs): _get(a.session_id).delete(a.name);return"ok"
+
+@mcp.tool(name="validate")         # 6
+def validate(a:Sid): return _get(a.session_id).validate()
+
+class SimArgs(Sid): stop_time:str
+@mcp.tool(name="sim")              # 7
+def sim(a:SimArgs): return _get(a.session_id).sim(a.stop_time)
+
+class ListSigArgs(Sid): run_id:str
+@mcp.tool(name="list_signals")     # 8
+def lsig(a:ListSigArgs): return _get(a.session_id).list_signals(a.run_id)
+
+class PlotArgs(Sid):
+    run_id:str; source:Literal["yout","logsout"]="yout"; index:int=1
+@mcp.tool(name="plot")             # 9
+def plot(a:PlotArgs): return _get(a.session_id).plot(a.run_id,a.source,a.index)
+
+class ShotArgs(Sid):
+    pass
+@mcp.tool(name="snapshot")
+def shot(a:ShotArgs): return _get(a.session_id).snapshot()
+
+class SaveArgs(Sid): name:str|None=None
+@mcp.tool(name="save_model")       #11
+def save(a:SaveArgs): return _get(a.session_id).save_model(a.name)
+
+@mcp.tool(name="close_session")    #12
+def close(a:Sid): _get(a.session_id).close(); _SESS.pop(a.session_id);return"closed"
+
+# ── run as stdio server ─────────────────────────────────────────────
+if __name__=="__main__":
+    mcp.run_stdio()
