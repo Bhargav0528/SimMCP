@@ -3,10 +3,7 @@ import os
 import tempfile
 import uuid
 import matlab
-
-# ──────────────────────────────────────────────────────────────────────
-# 1.  Session container around a single MATLAB Engine
-# ----------------------------------------------------------------------
+import matlab.engine
 
 
 class SimulinkSession:
@@ -62,9 +59,6 @@ class SimulinkSession:
         self.eng.quit()
 
 
-# ──────────────────────────────────────────────────────────────────────
-# 2.  In-memory session registry
-# ----------------------------------------------------------------------
 _SESS: dict[str, SimulinkSession] = {}
 
 
@@ -78,10 +72,6 @@ def _get(sid: str) -> SimulinkSession:
     if sid not in _SESS:
         raise ValueError("invalid session id")
     return _SESS[sid]
-
-# ──────────────────────────────────────────────────────────────────────
-# 3.  Pydantic argument models
-# ----------------------------------------------------------------------
 
 
 class Sid(BaseModel):
