@@ -2,8 +2,20 @@
 
 from pathlib import Path
 from fastmcp import FastMCP, Context
+
 from tools.core_tools.functions import *
 from tools.uav_tools.functions import *
+import json
+
+import logging
+
+# Configure the logging
+logging.basicConfig(
+    filename='app.log',           # Log file name
+    level=logging.INFO,           # Logging level
+    format='%(asctime)s - %(levelname)s - %(message)s'  # Log format
+)
+
 # ──────────────────────────────────────────────────────────────────────
 # Fast-MCP host
 # ----------------------------------------------------------------------
@@ -15,37 +27,17 @@ RES_DIR = Path(__file__).parent / "resources"
 # ⬦ 2. dynamic resource template
 
 
-@mcp.resource("res://{filepath*}")
-def get_static(filepath: str, ctx: Context):
+@mcp.resource("simulink://blocks")
+def get_simulink_blocks_json() -> dict:
     """
-    Serve any file under ./resources/ as an MCP resource.
-
-    Examples
-    --------
-    res://README.md
-    res://examples/mass_spring_recipe.json
+    Serve the entire Simulink blocks JSON data as a resource.
     """
-    full = (RES_DIR / filepath).resolve()
 
-    # security: keep access inside the folder
-    if not str(full).startswith(str(RES_DIR)):
-        raise FileNotFoundError("outside resources dir")
-
-    if not full.exists():
-        raise FileNotFoundError(filepath)
-
-    # simple binary read
-    data = full.read_bytes()
-
-    # fastmcp figures out MIME type from return value,
-    # but we can be explicit for images / pdf etc.
-    mime, _ = mimetypes.guess_type(full.name)
-    return {
-        "content": base64.b64encode(data).decode(),
-        "mime_type": mime or "application/octet-stream",
-        "encoding": "base64",
-        "filename": full.name,
-    }
+    JSON_PATH = Path(__file__).parent / "resources/SimulinkCore/core_blocks.json"
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        SIMULINK_BLOCKS_DATA = json.load(f)
+    logging.info(SIMULINK_BLOCKS_DATA);
+    return SIMULINK_BLOCKS_DATA
 
 
 mcp.tool(name="new_model",
@@ -79,5 +71,8 @@ mcp.tool()(move_platform)
 mcp.tool()(update_camera_target)
 mcp.tool()(drawnow_limitrate)
 # ──────────────────────────────────────────────────────────────────────
+
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
