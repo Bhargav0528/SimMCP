@@ -2,9 +2,10 @@
 
 from pathlib import Path
 from fastmcp import FastMCP, Context
-import json
 
-from tools.core_tools.functions import new_model, add_block, add_line, set_param, sim, export_plot, close_session
+from tools.core_tools.functions import *
+from tools.uav_tools.functions import *
+import json
 
 import logging
 
@@ -14,8 +15,6 @@ logging.basicConfig(
     level=logging.INFO,           # Logging level
     format='%(asctime)s - %(levelname)s - %(message)s'  # Log format
 )
-
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Fast-MCP host
@@ -40,10 +39,6 @@ def get_simulink_blocks_json() -> dict:
     logging.info(SIMULINK_BLOCKS_DATA);
     return SIMULINK_BLOCKS_DATA
 
-# ──────────────────────────────────────────────────────────────────────
-# 4.  Fast-MCP tool definitions
-# ----------------------------------------------------------------------
-
 
 mcp.tool(name="new_model",
          description="Create a blank Simulink model; returns a session_id.")(new_model)
@@ -59,6 +54,22 @@ mcp.tool(name="export_plot",
          description="Generate a PNG plot of the main output signal.")(export_plot)
 mcp.tool(name="close_session",
          description="Close the MATLAB session and free resources.")(close_session)
+
+mcp.tool()(start_matlab_engine)
+mcp.tool()(create_uav_scenario)
+mcp.tool()(add_mesh)
+mcp.tool()(create_platform)
+mcp.tool()(update_platform_mesh)
+mcp.tool()(load_uav_mission)
+mcp.tool()(create_mission_parser)
+mcp.tool()(parse_mission)
+mcp.tool()(show_3d_scene)
+mcp.tool()(setup_scenario)
+mcp.tool()(advance_scenario)
+mcp.tool()(query_trajectory)
+mcp.tool()(move_platform)
+mcp.tool()(update_camera_target)
+mcp.tool()(drawnow_limitrate)
 # ──────────────────────────────────────────────────────────────────────
 
 
